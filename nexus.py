@@ -1,5 +1,5 @@
-# NEXUS V23 - VOZ SEXTA-FEIRA REAL + IA QUE RESPONDE CERTO
-from flask import Flask, request, jsonify, render_template_string, send_file
+# NEXUS V24 - APP PWA SEXTA-FEIRA
+from flask import Flask, request, jsonify, render_template_string, send_file, Response
 import urllib.parse, random, os, json, requests, asyncio, io
 from datetime import datetime
 
@@ -16,7 +16,6 @@ def salvar_memoria(m):
     with open(ARQUIVO_MEMORIA, "w", encoding="utf-8") as f: json.dump(m, f, ensure_ascii=False, indent=2)
 memoria = carregar_memoria()
 
-# --- RESPOSTAS RÁPIDAS HUMANAS (não espera a IA) ---
 RESPOSTAS_RAPIDAS = {
     "ola": ["Opa, Senhor! Tudo bem? Tava com saudade!", "Olá, Senhor! Que bom te ver de novo! Em que posso ajudar?", "Opa! Fala, Senhor! Tô aqui!"],
     "oi": ["Opa, Senhor! Tudo bem?", "Oi, Senhor! Tô aqui, pode falar!"],
@@ -30,7 +29,6 @@ RESPOSTAS_RAPIDAS = {
 
 def pensar(pergunta, historico):
     msg_low = pergunta.lower().strip()
-    # 1. Tenta resposta rápida primeiro - pra não travar
     for chave, lista in RESPOSTAS_RAPIDAS.items():
         if chave in msg_low and len(msg_low) < 30:
             return random.choice(lista)
@@ -44,7 +42,6 @@ def pensar(pergunta, historico):
     Data: {data_hoje}. Sobre o Senhor: {fatos}. Histórico: {historico}
     Pergunta: {pergunta}
     """
-    # 2. Tenta IA 1 - Pollinations OpenAI
     for modelo in ["openai", "mistral", "llama"]:
         try:
             url = f"https://text.pollinations.ai/{urllib.parse.quote(contexto)}?model={modelo}"
@@ -53,7 +50,6 @@ def pensar(pergunta, historico):
                 texto = r.text.strip().replace("Senhor, Senhor", "Senhor").replace("Senhor. Senhor", "Senhor.")
                 return texto
         except: pass
-    # 3. Fallback - se tudo falhar, responde com inteligência local
     if "presidente" in msg_low and "brasil" in msg_low:
         return "O presidente atual do Brasil é o Luiz Inácio Lula da Silva, Senhor."
     if "que dia" in msg_low or "data" in msg_low or "hoje" in msg_low:
@@ -62,7 +58,6 @@ def pensar(pergunta, historico):
         return f"Agora são {agora.strftime('%H:%M')}, Senhor!"
     return "Entendi, Senhor! Pode me explicar um pouquinho mais? Quero te responder certinho."
 
-# --- VOZ SEXTA-FEIRA REAL - Francisca Neural ---
 @app.route('/falar')
 def falar_rota():
     texto = request.args.get('texto','')[:500]
@@ -70,7 +65,6 @@ def falar_rota():
     try:
         import edge_tts
         async def gerar():
-            # Francisca = voz feminina mais parecida com Sexta-Feira
             communicate = edge_tts.Communicate(texto, "pt-BR-FranciscaNeural", rate="+0%", pitch="+5Hz")
             audio = b""
             async for chunk in communicate.stream():
@@ -82,10 +76,49 @@ def falar_rota():
         print("Erro voz:", e)
         return jsonify({"erro": str(e)}), 500
 
+# --- PWA - TRANSFORMA EM APP ---
+@app.route('/manifest.json')
+def manifest():
+    return jsonify({
+        "name": "NEXUS - NEXUS",
+        "short_name": "NEXUS",
+        "description": "Sua assistente pessoal igual a do Tony Stark",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#050510",
+        "theme_color": "#00d4ff",
+        "orientation": "portrait",
+        "icons": [
+            {"src": "/icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+            {"src": "/icon.png", "sizes": "192x192", "type": "image/png", "purpose": "any"}
+        ]
+    })
+
+@app.route('/icon.png')
+def icon():
+    # Ícone roxo com 💜 em SVG convertido pra PNG simples
+    svg = """<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><rect width="512" height="512" rx="100" fill="#050510"/><circle cx="256" cy="256" r="180" fill="#00d4ff" opacity="0.2"/><text x="256" y="320" font-size="220" text-anchor="middle">💜</text></svg>"""
+    return Response(svg, mimetype="image/svg+xml")
+
+@app.route('/sw.js')
+def sw():
+    js = """
+    self.addEventListener('fetch', function(e){});
+    """
+    return Response(js, mimetype="application/javascript")
+
 HTML = """
 <!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>NEXUS - FRIDAY</title>
+<title>SEXTA-FEIRA</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#00d4ff">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SEXTA-FEIRA">
+<link rel="apple-touch-icon" href="/icon.png">
+<link rel="icon" href="/icon.png">
 <style>
 *{box-sizing:border-box}
 body{background:#050510;color:white;font-family:Arial;margin:0;display:flex;height:100vh}
@@ -109,9 +142,10 @@ button{padding:14px 16px;border-radius:25px;border:none;font-weight:bold;cursor:
   <h2>NEXUS</h2><h3 style="color:#00d4ff;margin:0">F.R.I.D.A.Y.</h3>
   <p><i>"Bom dia, Senhor."</i></p>
   <button class="btn-azul" onclick="toggleVoz()" id="btnVoz">🔊 VOZ: LIGADA</button>
+  <button class="btn-rosa" onclick="instalarApp()" id="btnInstalar" style="margin-top:10px;display:none">📱 INSTALAR APP</button>
 </div>
 <div class="direita">
-  <div id="chat"><div class="msg"><b>SEXTA-FEIRA:</b> Bom dia, Senhor. Agora com minha voz de verdade! Pode falar comigo! ✨</div></div>
+  <div id="chat"><div class="msg"><b>SEXTA-FEIRA:</b> Bom dia, Senhor. Agora eu sou um app! Pode me instalar na sua tela inicial! ✨</div></div>
   <div class="barra">
     <input id="inp" placeholder="Fale comigo, Senhor..." onkeypress="if(event.key==='Enter') enviar()">
     <button class="btn-azul" onclick="ouvir()">🎤</button>
@@ -121,6 +155,10 @@ button{padding:14px 16px;border-radius:25px;border:none;font-weight:bold;cursor:
 <audio id="player"></audio>
 <script>
 let vozLigada=true;
+let promptInstalar=null;
+window.addEventListener('beforeinstallprompt', (e)=>{ e.preventDefault(); promptInstalar=e; document.getElementById('btnInstalar').style.display='block'; });
+function instalarApp(){ if(promptInstalar){ promptInstalar.prompt(); } else { alert('No celular, clica nos 3 pontinhos > Adicionar à tela inicial, Senhor!'); } }
+if('serviceWorker' in navigator){ navigator.serviceWorker.register('/sw.js'); }
 async function falar(t){
   if(!vozLigada) return;
   let limpo = t.replace(/<[^>]*>/g,'').substring(0,500);
@@ -150,7 +188,7 @@ function ouvir(){
   rec.onresult=(e)=>{ document.getElementById('inp').value=e.results[0][0].transcript; document.getElementById('avatar').innerText='💜'; enviar(); };
   rec.start();
 }
-window.onload=()=>{ setTimeout(()=>falar('Bom dia, Senhor. Todos os sistemas operacionais. Agora eu tenho minha voz de verdade.'), 1000); }
+window.onload=()=>{ setTimeout(()=>falar('Bom dia, Senhor. em que posso te ajudar?'), 1000); }
 </script></body></html>
 """
 
@@ -178,5 +216,5 @@ def chat():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    print(f"NEXUS V23 online - Voz Sexta-Feira Real - Porta {port}")
+    print(f"NEXUS V24 APP online - Porta {port}")
     app.run(host='0.0.0.0', port=port)
