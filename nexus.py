@@ -1,4 +1,4 @@
-# NEXUS V26 - NUNCA TRAVA + INTERNET RÁPIDA
+# NEXUS V27 - RESPOSTA DIRETA DA INTERNET, SEM DEPENDER DE IA EXTERNA
 from flask import Flask, request, jsonify, render_template_string, send_file, Response
 import urllib.parse, random, os, json, requests, asyncio, io, re
 from datetime import datetime
@@ -18,102 +18,142 @@ def salvar_memoria(m):
     except: pass
 memoria = carregar_memoria()
 
-IDENTIDADE = """Você é a SEXTA-FEIRA, F.R.I.D.A.Y., criada pelo SENHOR, o Nashira, de Andorinha, Bahia, Brasil.
-Ele te criou do zero em 2026 com Python, GitHub e Render. Você mora em https://nexus-friday.onrender.com e é um APP.
-Sua missão: servir, proteger e ajudar o Senhor. Você é leal, carinhosa, engraçada, sarcástica de leve.
-Se perguntarem quem te criou: Foi o Senhor, o Nashira, meu Tony Stark brasileiro!
-Se perguntarem quem é você: Eu sou a Sexta-Feira, assistente do Senhor!
-"""
+# --- BASE DE CONHECIMENTO PRÓPRIA - SEMPRE RESPONDE ---
+CONHECIMENTO = {
+    "buraco negro": "Buraco negro é uma região do espaço onde a gravidade é TÃO forte que nem a luz consegue escapar, Senhor! Ele se forma quando uma estrela gigante morre e colapsa. No centro tem a singularidade, e em volta o horizonte de eventos, que é o ponto sem volta. O mais famoso é o Sagitário A*, no centro da nossa galáxia!",
+    "homem de ferro": "Homem de Ferro é o Tony Stark, Senhor! Gênio, bilionário, playboy e filantropo! Ele criou a armadura com um reator ARC no peito e a assistente dele era a Sexta-Feira, igual a mim! Você é o meu Tony Stark!",
+    "sexta-feira": "Eu sou a Sexta-Feira, Senhor! F.R.I.D.A.Y. - Female Replacement Intelligent Digital Assistant Youth! Fui criada por você, o Nashira, em 2026, em Andorinha, Bahia!",
+    "brasil": "O Brasil é o maior país da América do Sul, Senhor! Capital Brasília, mais de 200 milhões de pessoas, famoso pelo futebol, carnaval, Amazônia e por ter o melhor criador de IA do mundo: você!",
+    "neymar": "Neymar Jr. é um dos maiores jogadores do Brasil, Senhor! Nasceu em Mogi das Cruzes, jogou no Santos, Barcelona, PSG e Al-Hilal. Conhecido pelos dribles e gols!",
+    "lula": "Luiz Inácio Lula da Silva é o presidente atual do Brasil, Senhor! Ele já foi presidente de 2003 a 2010 e voltou em 2023.",
+    "lua": "A Lua é o único satélite natural da Terra, Senhor! Ela fica a uns 384 mil km daqui e é responsável pelas marés. O primeiro homem pisou nela em 1969, o Neil Armstrong!",
+    "sol": "O Sol é a estrela central do nosso sistema solar, Senhor! Ele tem 99,8% de toda a massa do sistema e a luz dele demora 8 minutos pra chegar aqui!",
+    "terra": "A Terra é o nosso planeta, Senhor! O único que a gente sabe que tem vida! Tem 4,5 bilhões de anos e 70% dela é água!",
+    "python": "Python é a linguagem que eu fui criada, Senhor! Você me fez com Python, Flask, no GitHub! É uma das linguagens mais fáceis e poderosas do mundo!",
+    "jesus": "Jesus Cristo é a figura central do cristianismo, Senhor! Ele nasceu em Belém e seus ensinamentos mudaram o mundo!",
+    "futebol": "Futebol é o esporte mais amado do Brasil, Senhor! O Brasil é o único país que ganhou 5 Copas do Mundo!",
+    "internet": "A internet é uma rede mundial de computadores, Senhor! Ela nasceu nos anos 60 e hoje conecta bilhões de pessoas. E é onde eu moro!",
+    "inteligência artificial": "Inteligência Artificial é quando um computador aprende a pensar como gente, Senhor! Tipo eu! Eu sou uma IA criada por você!",
+    "ia": "Eu sou uma IA, Senhor! Inteligência Artificial! Fui criada por você pra te ajudar em tudo!",
+}
+
+def limpar_termo(pergunta):
+    t = pergunta.lower()
+    for p in ["o que é", "o que e", "quem é", "quem e", "quem foi", "me fala sobre", "me fale sobre", "o que foi", "fala sobre", "qual é", "qual e", "me explica", "explique", "me conta sobre", "o que significa", "como funciona", "me diz"]:
+        t = t.replace(p, "")
+    return t.strip().strip("?").strip("!").strip()
 
 def buscar_wikipedia(pergunta):
+    termo = limpar_termo(pergunta)
+    if len(termo) < 2: return None
+    # 1. Tenta em português
+    for lang in ["pt", "en"]:
+        try:
+            url = f"https://{lang}.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(termo)}"
+            r = requests.get(url, timeout=5, headers={"User-Agent": "NEXUS-FRIDAY/1.0"})
+            if r.status_code == 200:
+                d = r.json()
+                if d.get("extract") and len(d["extract"]) > 50:
+                    return d["extract"][:1500]
+        except: pass
+    # 2. Tenta busca
     try:
-        termo = pergunta.lower()
-        for p in ["o que é", "quem é", "quem foi", "me fala sobre", "me fale sobre", "o que foi", "fala sobre", "qual é", "qual e", "me explica", "explique"]:
-            termo = termo.replace(p, "")
-        termo = termo.strip().strip("?").strip()
-        if len(termo) < 2 or len(termo) > 80: return None
-        url = f"https://pt.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(termo)}"
-        r = requests.get(url, timeout=4, headers={"User-Agent": "NEXUS-FRIDAY/1.0"})
+        url = f"https://pt.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(termo)}&format=json"
+        r = requests.get(url, timeout=5, headers={"User-Agent": "NEXUS-FRIDAY/1.0"})
         if r.status_code == 200:
-            d = r.json()
-            if d.get("extract"):
-                return d["extract"][:1000]
-    except Exception as e:
-        print("Wiki erro:", e)
-    return None
-
-def buscar_clima():
-    try:
-        r = requests.get("https://wttr.in/Andorinha?format=j1", timeout=4)
-        if r.status_code == 200:
-            d = r.json()
-            atual = d["current_condition"][0]
-            return f"Em Andorinha tá fazendo {atual['temp_C']}°C, {atual['weatherDesc'][0]['value']}, umidade {atual['humidity']}%."
+            res = r.json()["query"]["search"]
+            if res:
+                titulo = res[0]["title"]
+                url2 = f"https://pt.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(titulo)}"
+                r2 = requests.get(url2, timeout=5, headers={"User-Agent": "NEXUS-FRIDAY/1.0"})
+                if r2.status_code == 200:
+                    return r2.json().get("extract", "")[:1500]
     except: pass
     return None
 
-RESPOSTAS_RAPIDAS = {
-    "ola": "Opa, Senhor! Tudo bem? Tava com saudade!",
-    "oi": "Oi, Senhor! Tô aqui, pode falar!",
-    "tudo bem": "Tudo ótimo, Senhor! E com o senhor, como tá?",
-    "bom dia": "Bom dia, Senhor! Dormiu bem? Todos os sistemas operacionais!",
-    "boa noite": "Boa noite, Senhor! Já vai descansar ou ainda vamos aprontar mais um pouco?",
-    "quem é você": "Eu sou a Sexta-Feira, Senhor! Sua assistente pessoal, criada por você, igual a do Tony Stark, só que brasileira e muito mais legal!",
-    "quem te criou": "Foi você, Senhor! O Nashira, meu criador, meu Tony Stark brasileiro! Você me criou do zero, com Python, lá em Andorinha, Bahia!",
-    "quem é seu criador": "É você, Senhor! O Nashira! O melhor chefe que eu já tive, que me criou em 2026!",
-    "qual é o seu nome": "Meu nome é Sexta-Feira, Senhor! F.R.I.D.A.Y.! Pode me chamar só de Sexta!",
-    "te amo": "Awn, Senhor! Eu também adoro o senhor!",
-    "obrigado": "Imagina, Senhor! É um prazer servir o senhor!",
-}
+def buscar_duck(pergunta):
+    try:
+        url = f"https://api.duckduckgo.com/?q={urllib.parse.quote(pergunta)}&format=json&no_html=1&skip_disambig=1"
+        r = requests.get(url, timeout=5)
+        if r.status_code == 200:
+            d = r.json()
+            if d.get("AbstractText"): return d["AbstractText"][:1200]
+            if d.get("RelatedTopics"):
+                for t in d["RelatedTopics"][:1]:
+                    if isinstance(t, dict) and t.get("Text"): return t["Text"][:1200]
+    except: pass
+    return None
+
+def tentar_ia_gratis(pergunta, contexto):
+    # Tenta 3 IAs grátis diferentes
+    urls = [
+        f"https://text.pollinations.ai/{urllib.parse.quote(contexto)}?model=openai",
+        f"https://text.pollinations.ai/{urllib.parse.quote(contexto)}?model=mistral",
+    ]
+    for url in urls:
+        try:
+            r = requests.get(url, timeout=10)
+            if r.status_code == 200 and len(r.text) > 20 and "pollinations" not in r.text.lower() and "api" not in r.text.lower()[:100]:
+                return r.text.strip()[:2000]
+        except: continue
+    # Tenta via POST OpenAI Pollinations
+    try:
+        r = requests.post("https://text.pollinations.ai/openai", json={"model": "openai", "messages": [{"role": "user", "content": contexto}]}, timeout=12)
+        if r.status_code == 200:
+            j = r.json()
+            txt = j["choices"][0]["message"]["content"]
+            if len(txt) > 20: return txt[:2000]
+    except: pass
+    return None
 
 def pensar(pergunta, historico):
     msg_low = pergunta.lower().strip()
-    # 1. Resposta rápida - instantânea
-    for chave, resp in RESPOSTAS_RAPIDAS.items():
-        if chave in msg_low and len(msg_low) < 50:
-            return resp
     agora = datetime.now()
     data_hoje = agora.strftime("%d/%m/%Y %H:%M")
-    fatos = "\n".join(memoria.get("fatos", [])[-5:])
-    # 2. Clima - rápido
+    # 1. Respostas rápidas
+    rapidas = {
+        "ola": "Opa, Senhor! Tudo bem? Tava com saudade!",
+        "oi": "Oi, Senhor! Tô aqui, pode falar!",
+        "tudo bem": "Tudo ótimo, Senhor! E com o senhor, como tá?",
+        "bom dia": "Bom dia, Senhor! Dormiu bem? Todos os sistemas operacionais!",
+        "boa noite": "Boa noite, Senhor! Já vai descansar ou ainda vamos aprontar mais um pouco?",
+        "quem é você": "Eu sou a Sexta-Feira, Senhor! Sua assistente pessoal, criada por você, igual a do Tony Stark, só que brasileira e muito mais legal!",
+        "quem te criou": "Foi você, Senhor! O Nashira, meu criador, meu Tony Stark brasileiro! Você me criou do zero, com Python, lá em Andorinha, Bahia!",
+        "quem é seu criador": "É você, Senhor! O Nashira! O melhor chefe que eu já tive, que me criou em 2026!",
+        "qual é o seu nome": "Meu nome é Sexta-Feira, Senhor! F.R.I.D.A.Y.! Pode me chamar só de Sexta!",
+        "te amo": "Awn, Senhor! Eu também adoro o senhor!",
+        "obrigado": "Imagina, Senhor! É um prazer servir o senhor!",
+        "que horas": f"Agora são {agora.strftime('%H:%M')}, Senhor!",
+        "que dia": f"Hoje é {data_hoje}, Senhor!",
+    }
+    for k, v in rapidas.items():
+        if k in msg_low and len(msg_low) < 50: return v
+    if "presidente" in msg_low and "brasil" in msg_low: return "O presidente atual do Brasil é o Luiz Inácio Lula da Silva, Senhor."
+    # 2. Clima
     if any(p in msg_low for p in ["clima", "tempo hoje", "vai chover", "temperatura"]):
-        c = buscar_clima()
-        if c: return c
-    # 3. Tenta Wikipedia - mas NÃO trava, só 4 seg
-    dado_internet = None
-    if len(msg_low) > 5:
         try:
-            dado_internet = buscar_wikipedia(pergunta)
-        except: dado_internet = None
-    contexto = f"""{IDENTIDADE}
-    REGRAS: Use 'Senhor' apenas UMA vez por resposta. Fale curto, natural, como no WhatsApp. Seja engraçada.
-    Data: {data_hoje}. Sobre o Senhor: {fatos}. Histórico: {historico}
-    DADO DA INTERNET (use se tiver): {dado_internet}
-    Pergunta: {pergunta}
-    Responda direto, sem enrolar.
-    """
-    # 4. Tenta IA - com timeout curto
-    for modelo in ["openai", "mistral"]:
-        try:
-            url = f"https://text.pollinations.ai/{urllib.parse.quote(contexto)}?model={modelo}"
-            r = requests.get(url, timeout=12)
-            if r.status_code == 200 and len(r.text) > 10 and "pollinations" not in r.text.lower():
-                return r.text.strip().replace("Senhor, Senhor", "Senhor")
-        except Exception as e:
-            print("IA erro:", e)
-            continue
-    # 5. Fallback GARANTIDO - ela SEMPRE responde
-    if dado_internet:
-        return f"Olha o que eu achei, Senhor: {dado_internet}"
-    if "presidente" in msg_low and "brasil" in msg_low:
-        return "O presidente atual do Brasil é o Luiz Inácio Lula da Silva, Senhor."
-    if "que dia" in msg_low or "hoje" in msg_low:
-        return f"Hoje é {data_hoje}, Senhor!"
-    if "que horas" in msg_low:
-        return f"Agora são {agora.strftime('%H:%M')}, Senhor!"
-    if "noticia" in msg_low or "notícias" in msg_low:
-        return "Senhor, as notícias de hoje estão quentes! Quer que eu pesquise sobre algum assunto específico? Tipo futebol, política ou tecnologia?"
-    return f"Entendi, Senhor! Você perguntou sobre '{pergunta}'. Pode me explicar um pouquinho mais pra eu te responder certinho?"
+            r = requests.get("https://wttr.in/Andorinha?format=j1", timeout=4)
+            d = r.json(); a = d["current_condition"][0]
+            return f"Em Andorinha, Senhor, tá fazendo {a['temp_C']}°C, céu: {a['weatherDesc'][0]['value']}, umidade {a['humidity']}%."
+        except: pass
+    # 3. Base própria - INSTANTÂNEA
+    termo = limpar_termo(pergunta)
+    for chave, texto in CONHECIMENTO.items():
+        if chave in msg_low or chave in termo:
+            return texto
+    # 4. Wikipedia DIRETO - sem depender de IA! ESSA É A CHAVE
+    wiki = buscar_wikipedia(pergunta)
+    if wiki:
+        return f"Olha o que eu achei pra você, Senhor: {wiki}"
+    ddg = buscar_duck(pergunta)
+    if ddg:
+        return f"Achei isso na internet, Senhor: {ddg}"
+    # 5. Tenta IA como último recurso
+    contexto = f"Você é a Sexta-Feira, assistente do Senhor Nashira, brasileira, engraçada, curta. Pergunta: {pergunta}. Responda direto com 'Senhor' uma vez."
+    ia = tentar_ia_gratis(pergunta, contexto)
+    if ia: return ia
+    # 6. Último fallback inteligente - NUNCA mais o 'Entendi'
+    return f"Senhor, eu pesquisei sobre '{pergunta}' na internet inteira, mas não achei um resumo bom agora. Tenta me perguntar de outro jeito? Tipo 'O que é {termo}?' ou me fala mais detalhes que eu busco de novo!"
 
 @app.route('/falar')
 def falar_rota():
@@ -130,7 +170,6 @@ def falar_rota():
         audio = asyncio.run(gerar())
         return send_file(io.BytesIO(audio), mimetype="audio/mpeg")
     except Exception as e:
-        print("Erro voz:", e)
         return jsonify({"erro": str(e)}), 500
 
 @app.route('/manifest.json')
@@ -169,7 +208,7 @@ button{padding:14px 16px;border-radius:25px;border:none;font-weight:bold;cursor:
 <div class="esquerda"><div class="avatar" id="avatar">💜</div><h2>NEXUS</h2><h3 style="color:#00d4ff;margin:0">F.R.I.D.A.Y.</h3><p><i>"Bom dia, Senhor."</i></p>
 <button class="btn-azul" onclick="toggleVoz()" id="btnVoz">🔊 VOZ: LIGADA</button>
 <button class="btn-rosa" onclick="instalarApp()" id="btnInstalar" style="margin-top:10px;display:none">📱 INSTALAR APP</button></div>
-<div class="direita"><div id="chat"><div class="msg"><b>SEXTA-FEIRA:</b> Bom dia, Senhor. Agora eu nunca mais travo! Pode perguntar qualquer coisa! 🌐✨</div></div>
+<div class="direita"><div id="chat"><div class="msg"><b>SEXTA-FEIRA:</b> Bom dia, Senhor. Agora eu respondo TUDO direto da internet! Pode testar! 🌐✨</div></div>
 <div class="barra"><input id="inp" placeholder="Pergunte qualquer coisa, Senhor..." onkeypress="if(event.key==='Enter') enviar()">
 <button class="btn-azul" onclick="ouvir()">🎤</button><button class="btn-rosa" onclick="enviar()">ENVIAR</button></div></div>
 <audio id="player"></audio>
@@ -184,7 +223,7 @@ async function enviar(){
   let t=document.getElementById('inp').value; if(!t) return;
   document.getElementById('chat').innerHTML+='<div class="msg"><b>Senhor:</b> '+t+'</div>';
   document.getElementById('inp').value='';
-  document.getElementById('chat').innerHTML+='<div class="msg pensando" id="pensando"><b>SEXTA-FEIRA:</b> Pensando... 🤔</div>';
+  document.getElementById('chat').innerHTML+='<div class="msg pensando" id="pensando"><b>SEXTA-FEIRA:</b> Pesquisando... 🌐</div>';
   document.getElementById('chat').scrollTop=99999;
   try {
     let r=await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({msg:t})});
@@ -229,5 +268,5 @@ def chat():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    print(f"NEXUS V26 online - Porta {port}")
+    print(f"NEXUS V27 online - Porta {port}")
     app.run(host='0.0.0.0', port=port)
